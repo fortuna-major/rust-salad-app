@@ -1,129 +1,157 @@
-#![allow(unused, dead_code)]
+#![allow(dead_code)]
 
-use core::num;
-use std::collections::HashMap;
-use std::env::{self, Args};
-
-use std::io::{self, Read, Write};
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)] //піддивилась
-enum Product {
-    Blender,
-    Microwave,
-    Toaster,
-    Fridge,
+use std::collections::HashSet;
+trait Caloric {
+    fn calories(&self) -> u32;
 }
 
-#[derive(Debug, Clone)]
-struct CustomerOrder {
-    ordered: Product,
-    quantity: u32,
-    shipped: bool,
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+enum Vegetable {
+    Tomato,
+    Cucumber,
+    SweetPotato,
 }
 
-impl CustomerOrder {
-    fn new(ordered: Product, quantity: u32, shipped: bool) -> Self {
+impl Caloric for Vegetable {
+    fn calories(&self) -> u32 {
+        match self {
+            Self::Tomato => 20,
+            Self::Cucumber => 15,
+            Self::SweetPotato => 100,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Protein {
+    CrispyChicken,
+    FriedChicken,
+    Steak,
+    Tofu,
+}
+
+impl Caloric for Protein {
+    fn calories(&self) -> u32 {
+        match self {
+            Self::CrispyChicken => 400,
+            Self::FriedChicken => 500,
+            Self::Steak => 300,
+            Self::Tofu => 200,
+        }
+    }
+}
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Dressing {
+    Ranch,
+    Vinaigrette,
+    Italian,
+}
+
+impl Caloric for Dressing {
+    fn calories(&self) -> u32 {
+        match self {
+            Self::Ranch => 150,
+            Self::Vinaigrette => 120,
+            Self::Italian => 130,
+        }
+    }
+}
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Salad {
+    protein: Protein,
+    vegetables: Vec<Vegetable>,
+    dressing: Dressing,
+}
+
+impl Salad {
+    fn new(protein: Protein, vegetables: Vec<Vegetable>, dressing: Dressing) -> Self {
         Self {
-            ordered,
-            quantity,
-            shipped,
+            protein,
+            vegetables,
+            dressing,
         }
     }
-}
-#[derive(Debug)]
-struct Customer {
-    id: u32,
-    orders: Vec<CustomerOrder>,
-}
 
-fn main() {
-    let mut orders = vec![
-        CustomerOrder::new(Product::Blender, 2, true),
-        CustomerOrder::new(Product::Microwave, 5, true),
-        CustomerOrder::new(Product::Fridge, 10, false),
-        CustomerOrder::new(Product::Toaster, 4, false),
-        CustomerOrder::new(Product::Microwave, 1, false),
-        CustomerOrder::new(Product::Blender, 4, true),
-    ];
-    let customer_ids_by_order = [2, 1, 2, 3, 4, 1];
-    let input = io::stdin();
-
-    let blenders = orders
-        .iter()
-        .filter(|order| order.ordered == Product::Blender)
-        .collect::<Vec<&CustomerOrder>>();
-    println!("{blenders:?}"); //абсолютно сама
-
-    /*let microwaves = orders
-            .iter()
-            .filter(|order| order.ordered == Product::Microwave)
-            .map(|order| order.quantity)
-            .sum::<u32>();
-    */
-    let microwaves = orders
-        .iter()
-        .filter_map(|order| {
-            if order.ordered == Product::Microwave {
-                Some(order.quantity)
-            } else {
-                None
-            }
-        })
-        .sum::<u32>();
-
-    println!("{microwaves:?}"); //чистила чатом; filter_map абсолютно сама
-
-    //unshipped HashMap
-    let unshipped = orders.iter().fold(HashMap::new(), |mut product, sum| {
-        if !sum.shipped {
-            product
-                .entry(sum.ordered.clone())
-                .and_modify(|q| *q += sum.quantity)
-                .or_insert(sum.quantity);
-        }
-        product
-    });
-
-    if let Some(order) = orders.iter_mut().find(|order| order.shipped == false) {
-        order.shipped = true;
-    } // з чатом
-
-    let args: Vec<String> = env::args().collect();
-
-    if args.len() < 2 {
-        eprint!("there was an error: cargo run -- <quantity>");
-        return;
+    fn is_valid(&self) -> bool {
+        self.vegetables.len() > 0
     }
-    let quantity: u32 = match args[1].parse() {
-        Ok(num) => num,
-        Err(_) => {
-            eprintln!("Enter valid number");
-            return;
-        }
-    }; // чвт
 
-    let boss_input: Vec<CustomerOrder> = orders
-        .iter()
-        .filter(|order| order.quantity >= quantity)
-        .cloned()
-        .collect();
+    fn calories(&self) -> u32 {
+        self.protein.calories()
+            + self.dressing.calories()
+            + self
+                .vegetables
+                .iter()
+                .map(|vegie| vegie.calories())
+                .sum::<u32>()
+    }
 
-    println!("{:#?}", boss_input); // з чатом
-
-    //though one
-    let mut customers = orders
-        .into_iter()
-        .zip(customer_ids_by_order)
-        .fold(HashMap::new(), |mut ids_to_orders, (order, customer_id)| {
-            let mut orders = { ids_to_orders.entry(customer_id).or_insert(vec![]) };
-            orders.push(order);
-            ids_to_orders
-        })
-        .into_iter()
-        .map(|(id, orders)| Customer { id, orders })
-        .collect::<Vec<Customer>>();
-
-    customers.sort_by_key(|customer| customer.id);
-
-    println!("{customers:#?}")
+    fn has_duplicate_veg(&self) -> bool {
+        self.vegetables
+            .clone()
+            .into_iter()
+            .fold(HashSet::<Vegetable>::new(), |mut data, vegetable| {
+                data.insert(vegetable);
+                data
+            })
+            .len()
+            < self.vegetables.len()
+    }
 }
+#[cfg(test)]
+
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+    use rstest::{fixture, rstest};
+
+    fn salad_contains_protein_vegetables_and_dressing() {
+        let salad = Salad::new(
+            Protein::Steak,
+            vec![Vegetable::SweetPotato, Vegetable::Tomato],
+            Dressing::Italian,
+        );
+        assert_eq!(salad.protein, Protein::Steak);
+        assert_eq!(salad.dressing, Dressing::Italian);
+    }
+    #[fixture]
+    fn chicken_salad_with_three_vegies_and_dressing() -> Salad {
+        Salad::new(
+            Protein::CrispyChicken,
+            vec![
+                Vegetable::SweetPotato,
+                Vegetable::Tomato,
+                Vegetable::Cucumber,
+            ],
+            Dressing::Ranch,
+        )
+    }
+    #[rstest]
+    fn salad_should_have_at_least_one_vegetable(
+        chicken_salad_with_three_vegies_and_dressing: Salad,
+    ) {
+        assert!(chicken_salad_with_three_vegies_and_dressing.is_valid());
+    }
+
+    #[rstest]
+    fn calculating_the_total_calories_in_the_sald(
+        chicken_salad_with_three_vegies_and_dressing: Salad,
+    ) {
+        assert_eq!(chicken_salad_with_three_vegies_and_dressing.calories(), 685);
+    }
+
+    #[rstest]
+
+    fn salad_has_duplicate() {
+        let salad = Salad::new(
+            Protein::Tofu,
+            vec![Vegetable::Cucumber, Vegetable::Cucumber],
+            Dressing::Ranch,
+        );
+
+        assert!(salad.has_duplicate_veg());
+    }
+}
+
+fn main() {}
+
